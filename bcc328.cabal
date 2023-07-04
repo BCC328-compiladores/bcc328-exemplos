@@ -1,0 +1,124 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: a340b002ce2bef1ee5ad54f7280795ccefcd90d227ad5cf5b1743f3d76fd44e4
+
+name:           bcc328
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/bcc328#readme>
+homepage:       https://github.com/githubuser/bcc328#readme
+bug-reports:    https://github.com/githubuser/bcc328/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2023 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/bcc328
+
+library
+  exposed-modules:
+      Exp.Backend.LLVM.Codegen
+      Exp.Backend.LLVM.ExpCodegen
+      Exp.Backend.Backend
+      Exp.Frontend.Frontend
+      Exp.Frontend.Lexer.ExpLexer
+      Exp.Frontend.Parser.ExpParser
+      Exp.Frontend.Syntax.ExpSyntax
+      Exp.Frontend.Typing.ExpTyping
+      Exp.Frontend.Typing.TyExp
+      Exp.Interp.ExpInterp
+  other-modules:
+      Paths_bcc328
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , bytestring
+    , containers
+    , directory
+    , filepath
+    , llvm-hs ==9.*
+    , llvm-hs-pretty >=0.9 && <1
+    , llvm-hs-pure ==9.*
+    , megaparsec
+    , mtl
+    , optparse-applicative
+    , parser-combinators
+    , prettyprinter
+    , process
+    , string-conversions
+    , haskeline >= 0.8
+    , text
+    , unix
+  default-language: Haskell2010
+
+executable exp
+  main-is: Exp.hs
+  other-modules:
+      Paths_bcc328
+  hs-source-dirs:
+      src/Exp
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , bcc328
+    , bytestring
+    , containers
+    , directory
+    , filepath
+    , llvm-hs ==9.*
+    , llvm-hs-pretty >=0.9 && <1
+    , llvm-hs-pure ==9.*
+    , megaparsec
+    , mtl
+    , optparse-applicative
+    , parser-combinators
+    , prettyprinter
+    , process
+    , string-conversions
+    , haskeline >= 0.8
+    , text
+    , unix
+  default-language: Haskell2010
+
+test-suite bcc328-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_bcc328
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      array
+    , base >=4.7 && <5
+    , bcc328
+    , bytestring
+    , containers
+    , directory
+    , filepath
+    , llvm-hs ==9.*
+    , llvm-hs-pretty >=0.9 && <1
+    , llvm-hs-pure ==9.*
+    , megaparsec
+    , mtl
+    , parser-combinators
+    , prettyprinter
+    , process
+    , string-conversions
+    , text
+    , unix
+  default-language: Haskell2010
