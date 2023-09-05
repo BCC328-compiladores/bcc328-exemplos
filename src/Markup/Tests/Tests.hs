@@ -4,7 +4,7 @@ import Markup.Printer.Html
 
 import Prelude hiding (readFile)
 import Data.ByteString.Lazy (readFile, ByteString)
-import Data.String (IsString, fromString)
+import Data.String (fromString)
 import Test.Tasty (defaultMain,TestTree,testGroup)
 import Test.Tasty.Golden (goldenVsString, findByExtension)
 import System.FilePath (takeBaseName, replaceExtension)

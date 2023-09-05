@@ -31,6 +31,8 @@ library
       Markup.Language.Syntax
       Markup.Language.Semantics
       Markup.Language.Frontend
+      Markup.Pipeline.CompilerPipeline
+      Markup.Pipeline.OptionsParser
       Markup.Printer.Html
       Markup.Printer.Html.Internal
       Markup.Printer.Backend
