@@ -1,87 +1,126 @@
 {-# OPTIONS_GHC -Wno-unused-do-bind#-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE RecursiveDo           #-}
+{-# LANGUAGE OverloadedStrings     #-}
+
 module Exp.Backend.LLVM.ExpCodegen (codeGen) where
 
-import LLVM.Module
-import LLVM.Context
+import qualified LLVM.AST.IntegerPredicate     as IP
+import           LLVM.AST                       ( Operand )
+import qualified LLVM.AST                      as AST
+import qualified LLVM.AST.Type                 as AST
+import           LLVM.AST.Name
 
-import qualified LLVM.AST as AST
-import qualified LLVM.AST.Constant as C
-import qualified LLVM.AST.Operand as L
-import qualified Data.ByteString as B
+import qualified LLVM.IRBuilder.Module         as L
+import qualified LLVM.IRBuilder.Monad          as L
+import qualified LLVM.IRBuilder.Instruction    as L
+import qualified LLVM.IRBuilder.Constant       as L
 
-import Exp.Backend.LLVM.Codegen
-import Exp.Frontend.Typing.TyExp
+import qualified Data.Map                      as M
+import           Control.Monad.State
 
-expGen :: TyExp -> LLVM ()
-expGen ex = do
-  external int "printf" [(charStar , AST.Name $ toName "args")]
-  define (typeOf $ fst ex) "main" [] blks
-  where
-    blks = createBlocks $ execCodegen $ do
-      entry1 <- addBlock entryBlockName
-      _ <- setBlock entry1
-      expGen' ex >>= ret
+import           Exp.Frontend.Typing.TyExp
+
+import           Data.Text                      ( Text, unpack )
 
 
-genBinOp :: TyExp -> TyExp ->
-            (L.Operand -> L.Operand -> Codegen L.Operand) ->
-            Codegen L.Operand
-genBinOp e1 e2 f
+-- When using the IRBuilder, both functions and variables have the type Operand
+
+data Env = Env { operands :: M.Map Text Operand
+               , strings :: M.Map Text Operand
+               }
+  deriving (Eq, Show)
+
+
+type LLVM = L.ModuleBuilderT (State Env)
+type Codegen = L.IRBuilderT LLVM
+
+-- register a function or variable in the code generation environment
+
+registerOperand :: MonadState Env m => Text -> Operand -> m ()
+registerOperand name op =
+  modify $ \env -> env { operands = M.insert name op (operands env) }
+
+-- type definitions
+
+charStar :: AST.Type
+charStar = AST.ptr AST.i8
+
+int :: AST.Type
+int = AST.i32
+
+-- code generation for expressions
+
+genBinOp :: (Operand -> Operand -> Codegen Operand) -> TyExp -> TyExp -> Codegen Operand
+genBinOp f e1 e2 
   = do
-      c1 <- expGen' e1
-      c2 <- expGen' e2
+      c1 <- codeGenExpr e1
+      c2 <- codeGenExpr e2
       f c1 c2
 
-expGen' :: TyExp -> Codegen L.Operand
-expGen' (_, TInt n)
-  = return $ cons $ C.Int 32 (fromIntegral n)
-expGen' (_, TBool b)
-  = return $ cons $ C.Int 1  (if b then 1 else 0)
-expGen' (_, TAdd e1 e2)
-  = genBinOp e1 e2 fadd
-expGen' (_, TSub e1 e2)
-  = genBinOp e1 e2 fsub
-expGen' (_, TAnd e1 e2)
-  = genBinOp e1 e2 fand
-expGen' (_, TIsZero e1)
-  = genBinOp e1 (Int, TInt 0) feq
-expGen' (_, TNot e1)
-  = genBinOp e1 (Bool, TBool True) fxor
-expGen' (t, TIf e1 e2 e3)
+codeGenExpr :: TyExp -> Codegen Operand
+codeGenExpr (_ , TInt n)
+  = pure $ L.int32 (fromIntegral n)
+codeGenExpr (_, TBool b)
+  = pure $ L.bit (if b then 1 else 0)
+codeGenExpr (_, TAdd e1 e2)
+  = genBinOp L.add e1 e2
+codeGenExpr (_, TSub e1 e2)
+  = genBinOp L.sub e1 e2
+codeGenExpr (_, TIsZero e1)
+  = genBinOp (L.icmp IP.EQ) e1 (Int, TInt 0)
+codeGenExpr (_, TAnd e1 e2)
+  = genBinOp L.and e1 e2
+codeGenExpr (_, TNot e1)
+  = genBinOp L.xor e1 (Bool, TBool True)
+codeGenExpr (_, TIf e1 e2 e3)
+  = mdo
+      cond <- codeGenExpr e1
+      L.condBr cond thenBlock elseBlock
+      thenBlock <- L.block `L.named` "then"
+      thenRes <- codeGenExpr e2
+      elseBlock <- L.block `L.named` "else"
+      elseRes <- codeGenExpr e3
+      L.phi [(thenRes, thenBlock), (elseRes, elseBlock)]
+
+-- strings need to be defined as globals
+
+addString :: Text -> Codegen Operand
+addString s
   = do
-     ifthen <- addBlock "if.then"
-     ifelse <- addBlock "if.else"
-     ifexit <- addBlock "if.exit"
-     -- code generation for condition
-     c1 <- expGen' e1
-     c0 <- expGen' (Bool, TBool True)
-     test <- feq c0 c1
-     cbr test ifthen ifelse
-     -- code generation for then
-     setBlock ifthen
-     c2 <- expGen' e2
-     br ifexit
-     ifthen1 <- getBlock
-     -- code generation for else
-     setBlock ifelse
-     c3 <- expGen' e3
-     br ifexit
-     ifelse1 <- getBlock
-     -- code generation for exit
-     setBlock ifexit
-     phi (typeOf t) [(c2, ifthen1), (c3, ifelse1)]
-
-typeOf :: Ty -> AST.Type
-typeOf Int = int
-typeOf Bool = bool
+      strs <- gets strings
+      case M.lookup s strs of
+        Nothing -> do
+          let nm = mkName (show (M.size strs) <> ".str")
+          op <- L.globalStringPtr (unpack s) nm
+          modify $ \env -> env { strings = M.insert s (AST.ConstantOperand op) strs }
+          pure (AST.ConstantOperand op)
+        Just op -> pure op
 
 
--- top level code generation
-
-codeGen :: AST.Module -> TyExp -> IO B.ByteString
-codeGen md e
-  = withContext $ \ ctx ->
-        withModuleFromAST ctx newast $
-         \ m -> moduleLLVMAssembly m
+codeGenMain :: Operand -> TyExp -> LLVM ()
+codeGenMain f e
+  = mdo
+      registerOperand "main" fmain
+      fmain <- L.function "main" [] int genBody
+      return ()
     where
-      newast = runLLVM md (expGen e)
+      -- hack to print the result at the end
+      genBody :: [Operand] -> Codegen ()
+      genBody _
+         = do
+             op <- addString "%d"
+             body <- codeGenExpr e
+             zero <- codeGenExpr (Int, TInt 0)
+             L.call f [(op, []), (body, [])]
+             L.ret zero
+             return ()
+  
+codeGen :: TyExp -> AST.Module
+codeGen e
+  = flip evalState (Env { operands = M.empty , strings = M.empty })
+    $ L.buildModuleT "exp"
+    $ do
+        printf <- L.externVarArgs (mkName "printf") [charStar] int
+        registerOperand "printf" printf
+        codeGenMain printf e

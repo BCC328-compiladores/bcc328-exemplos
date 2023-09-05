@@ -31,12 +31,16 @@ dependencies:
   - unix
   - filepath
   - bytestring
+  - haskeline
   - prettyprinter
   - llvm-hs-pure >= 9 && < 10
   - llvm-hs >= 9 && < 10
   - llvm-hs-pretty >= 0.9 && < 1
   - megaparsec
   - parser-combinators
+  - tasty
+  - tasty-golden
+  - optparse-applicative
 
 ghc-options:
 - -Wall
