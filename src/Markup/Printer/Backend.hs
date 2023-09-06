@@ -1,5 +1,6 @@
 module Markup.Printer.Backend (backEnd) where
 
+import Markup.Language.Env
 import qualified Markup.Language.Syntax as AST
 import qualified Markup.Printer.Html as HTML
 

@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Markup.Language.Env
       Markup.Language.Parser
       Markup.Language.Syntax
       Markup.Language.Semantics

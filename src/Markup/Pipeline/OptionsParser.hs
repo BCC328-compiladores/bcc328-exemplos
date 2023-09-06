@@ -5,6 +5,7 @@ module Markup.Pipeline.OptionsParser ( Options (..)
                                      ) where
 
 import Data.Maybe (fromMaybe)
+import Markup.Language.Env
 import Options.Applicative
 
 ----------------------------------------------------
@@ -25,7 +26,7 @@ data Output
  
 data Options
   = Single Input Output
-  | Directory FilePath FilePath
+  | Directory FilePath FilePath Env 
   deriving Show
 
 -- functions for defining the parser
@@ -44,12 +45,14 @@ pOptions :: Parser Options
 pOptions
   = subparser (singleParser <> directoryParser)
     where
-      singleParser = command "file"
-                             (info (helper <*> pSingle)
-                                   (progDesc "Convert a single markdown file to HTML"))
-      directoryParser = command "directory"
-                                (info (helper <*> pDirectory)
-                                      (progDesc "Convert a directory of markdown files to HTML"))
+      singleParser
+        = command "file"
+                  (info (helper <*> pSingle)
+                        (progDesc "Convert a single markdown file to HTML"))
+      directoryParser
+        = command "directory"
+                  (info (helper <*> pDirectory)
+                        (progDesc "Convert all directory md files to HTML"))
 
 -- parsing files
 
@@ -91,7 +94,7 @@ pOutputFile = FileOutput <$> parser
 
 pDirectory :: Parser Options
 pDirectory =
-  Directory <$> pInputDir <*> pOutputDir
+  Directory <$> pInputDir <*> pOutputDir <*> pEnv
 
 pInputDir :: Parser FilePath
 pInputDir =
@@ -110,3 +113,13 @@ pOutputDir =
       <> metavar "DIRECTORY"
       <> help "Output directory"
     )
+
+pEnv :: Parser Env
+pEnv = fromMaybe defaultEnv <$> optional p
+  where
+    p =  Env <$> strOption
+                 (  long "style"
+                 <> short 'S'
+                 <> metavar "FILE"
+                 <> help "Stylesheet filename"
+                 )

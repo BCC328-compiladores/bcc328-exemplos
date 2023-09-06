@@ -6,7 +6,8 @@ module Markup.Pipeline.CompilerPipeline ( createHandles
 
 import Control.Monad (when, unless)
 import Data.List (partition)
-import Markup.Printer.Html (Head, render, title_)
+import Markup.Printer.Html (Head, render, title_, stylesheet_)
+import Markup.Language.Env
 import Markup.Language.Frontend
 import Markup.Printer.Backend
 import Markup.Pipeline.OptionsParser
@@ -73,25 +74,25 @@ startPipeline
   = do
       options <- optionsParser
       case options of
-        Single inp out -> filePipeline False inp out
-        Directory inpDir outDir -> directoryPipeline inpDir outDir
+        Single inp out -> filePipeline False defaultEnv inp out
+        Directory inpDir outDir env -> directoryPipeline env inpDir outDir
 
-filePipeline :: Bool -> Input -> Output -> IO ()
-filePipeline dirMode inpFile outFile 
+filePipeline :: Bool -> Env -> Input -> Output -> IO ()
+filePipeline dirMode env inpFile outFile 
   = do
       progressMessage dirMode inpFile
       (title,inpHandle,outHandle) <- createHandles inpFile outFile
       content <- hGetContents inpHandle
-      res <- pipeline (title_ title) content
+      let header = title_ title <> stylesheet_ (stylePath env) 
+      res <- pipeline header content
       hPutStrLn outHandle res
       hClose inpHandle
       hClose outHandle
 
 progressMessage :: Bool -> Input -> IO ()
-progressMessage False _ = return ()
-progressMessage True Stdin = return ()
 progressMessage True (FileInput file)
   = putStrLn $ "Processing file " ++ file
+progressMessage _ _ = return ()
 
 pipeline :: Head -> String -> IO String
 pipeline title content
@@ -119,14 +120,18 @@ directoryContents inputDir
          htmlFiles = map (\ f -> takeBaseName f <.> "html") mdFiles
        return $ DirContents (zip mdFiles htmlFiles) otherFiles
 
-directoryPipeline :: FilePath -> FilePath -> IO ()
-directoryPipeline inputDir outputDir
+directoryPipeline :: Env -> FilePath -> FilePath -> IO ()
+directoryPipeline env inputDir outputDir
   = do
-      DirContents files otherFiles <- directoryContents inputDir
+      d <- directoryContents inputDir
+      let files = filesToCompile d
+          otherFiles = filesToCopy d
       let entries = map (\ (i,o) -> (FileInput i, FileOutput o)) files
       shouldContinue <- createOutputDirectory outputDir
       unless shouldContinue (hPutStrLn stderr "Cancelled." *> exitFailure)
-      mapM_ (uncurry (filePipeline True)) entries
+      mapM_ (uncurry (filePipeline True env)) entries
+      let copy file = copyFile file (outputDir </> takeFileName file)
+      mapM_ copy otherFiles
       putStrLn "Done."
 
 

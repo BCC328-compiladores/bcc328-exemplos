@@ -1,12 +1,14 @@
-module Markup.Language.Env where
+module Markup.Language.Env ( Env (..)
+                           , stylePath
+                           , defaultEnv
+                           ) where
 
 -- definition of a simple environment
 
 data Env
   = Env {
-      name :: String -- name of the page
-    , stylePath :: FilePath -- path of css file
+      stylePath :: FilePath -- path of css file
     } deriving Show
 
 defaultEnv :: Env
-defaultEnv = Env "Sample" "style.css"
+defaultEnv = Env "" -- no css file

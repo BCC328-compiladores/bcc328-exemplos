@@ -1,6 +1,8 @@
 module Markup.Printer.Html ( Html
                            , Head
                            , title_
+                           , stylesheet_
+                           , meta_
                            , Structure
                            , html_
                            , h_
