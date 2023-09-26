@@ -9,7 +9,7 @@ Configurando o ambiente de desenvolvimento
 ----------------------------------------------
 
 O ambiente contendo todas as versões adequadas de compiladores e bibliotecas
-pode ser obtido usando o gerenciador de pacotes [Nix])(https://nixos.org/download).
+pode ser obtido usando o gerenciador de pacotes [Nix](https://nixos.org/download).
 Versões para diferentes sistemas operacionais estão disponíveis no link 
 anterior.
 
@@ -45,7 +45,7 @@ O repositório é composto pelas seguintes pastas:
 - Parsing: implementação de algoritmos sobre gramáticas livres de contexto.
 
 - Stack: implementação de uma máquina virtual utilizando uma arquitetura baseada 
-  em pilhas.
+  em pilha.
 
 
 Executando / Testando código
