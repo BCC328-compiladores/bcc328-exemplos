@@ -1,5 +1,4 @@
 module Markup.Language.Env ( Env (..)
-                           , stylePath
                            , defaultEnv
                            ) where
 

@@ -1,0 +1,16 @@
+pushi 0
+pushi 0
+store
+pushi 0
+in
+store
+pushi 0
+pushi 0
+load
+pushi 1
+add
+store
+pushi 0
+load
+out
+halt

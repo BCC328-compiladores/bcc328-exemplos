@@ -4,7 +4,7 @@ module Markup.Pipeline.CompilerPipeline ( createHandles
                                         , hClose
                                         ) where
 
-import Control.Monad (when, unless)
+import Control.Monad.Reader
 import Data.List (partition)
 import Markup.Printer.Html (Head, render, title_, stylesheet_)
 import Markup.Language.Env
@@ -74,30 +74,45 @@ startPipeline
   = do
       options <- optionsParser
       case options of
-        Single inp out -> filePipeline False defaultEnv inp out
-        Directory inpDir outDir env -> directoryPipeline env inpDir outDir
+        Single inp out ->
+          runCompilerM defaultEnv (filePipeline False inp out)
+        Directory inpDir outDir env ->
+          runCompilerM env (directoryPipeline inpDir outDir)
 
-filePipeline :: Bool -> Env -> Input -> Output -> IO ()
-filePipeline dirMode env inpFile outFile 
+-- definition of the compilation pipeline monad
+
+type CompilerM a = (ReaderT Env IO) a
+
+runCompilerM :: Env -> CompilerM a -> IO a
+runCompilerM env m = runReaderT m env
+
+filePipeline :: Bool -> Input -> Output -> CompilerM ()
+filePipeline dirMode inpFile outFile 
   = do
+      env <- ask
       progressMessage dirMode inpFile
-      (title,inpHandle,outHandle) <- createHandles inpFile outFile
-      content <- hGetContents inpHandle
+      (title,inpHandle,outHandle) <- liftIO $ createHandles inpFile outFile
+      content <- liftIO $ hGetContents inpHandle
       let header = title_ title <> stylesheet_ (stylePath env) 
       res <- pipeline header content
+      writeAndCloseHandles res inpHandle outHandle
+
+writeAndCloseHandles :: String -> Handle -> Handle -> CompilerM ()
+writeAndCloseHandles res inpHandle outHandle
+  = liftIO $ do
       hPutStrLn outHandle res
       hClose inpHandle
       hClose outHandle
 
-progressMessage :: Bool -> Input -> IO ()
+progressMessage :: Bool -> Input -> CompilerM ()
 progressMessage True (FileInput file)
-  = putStrLn $ "Processing file " ++ file
+  = liftIO $ putStrLn $ "Processing file " ++ file
 progressMessage _ _ = return ()
 
-pipeline :: Head -> String -> IO String
+pipeline :: Head -> String -> CompilerM String
 pipeline title content
   = case frontEnd content of
-      Left err -> putStrLn err >> exitFailure
+      Left err -> liftIO $ putStrLn err >> exitFailure
       Right ast -> return $ render $ backEnd title ast
 
 ---------------------------------------------------
@@ -110,40 +125,55 @@ data DirContents
      , filesToCopy :: [FilePath]
     }
 
-directoryContents :: FilePath -> IO DirContents
+directoryContents :: FilePath -> CompilerM DirContents
 directoryContents inputDir
   = do
-       files <- map (inputDir </>) <$> listDirectory inputDir
+       files <- map (inputDir </>) <$> listDirectoryM inputDir
        let
          select = (== ".md") . takeExtension
          (mdFiles, otherFiles) = partition select files
          htmlFiles = map (\ f -> takeBaseName f <.> "html") mdFiles
        return $ DirContents (zip mdFiles htmlFiles) otherFiles
 
-directoryPipeline :: Env -> FilePath -> FilePath -> IO ()
-directoryPipeline env inputDir outputDir
+directoryPipeline :: FilePath -> FilePath -> CompilerM ()
+directoryPipeline inputDir outputDir
   = do
       d <- directoryContents inputDir
       let files = filesToCompile d
           otherFiles = filesToCopy d
       let entries = map (\ (i,o) -> (FileInput i, FileOutput o)) files
       shouldContinue <- createOutputDirectory outputDir
-      unless shouldContinue (hPutStrLn stderr "Cancelled." *> exitFailure)
-      mapM_ (uncurry (filePipeline True env)) entries
-      let copy file = copyFile file (outputDir </> takeFileName file)
+      liftIO $ unless shouldContinue (hPutStrLn stderr "Cancelled." *> exitFailure)
+      mapM_ (uncurry (filePipeline True)) entries
+      let copy file = liftIO $ copyFile file (outputDir </> takeFileName file)
       mapM_ copy otherFiles
-      putStrLn "Done."
+      liftIO $ putStrLn "Done."
 
 
-createOutputDirectory :: FilePath -> IO Bool
+createOutputDirectory :: FilePath -> CompilerM Bool
 createOutputDirectory outDir
   = do
-      dirExists <- doesDirectoryExist outDir
+      dirExists <- doesDirectoryExistM outDir
       shouldCreate <-
         if dirExists then do
-          override <- confirmOverwrite outDir
-          when override (removeDirectoryRecursive outDir)
+          override <- confirmOverwriteM outDir
+          whenM override (removeDirectoryRecursive outDir)
           return override
         else return True
-      when shouldCreate (createDirectory outDir)
+      whenM shouldCreate (createDirectory outDir)
       return shouldCreate
+
+-- lifting IO operations to compilerM
+
+doesDirectoryExistM :: FilePath -> CompilerM Bool
+doesDirectoryExistM p = liftIO (doesDirectoryExist p)
+
+confirmOverwriteM :: FilePath -> CompilerM Bool
+confirmOverwriteM p = liftIO (confirmOverwrite p)
+
+whenM :: Bool -> IO () -> CompilerM ()
+whenM True  m = liftIO m
+whenM _ _ = return ()
+
+listDirectoryM :: FilePath -> CompilerM [FilePath]
+listDirectoryM p = liftIO $ listDirectory p

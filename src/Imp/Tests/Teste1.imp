@@ -1,0 +1,4 @@
+int x := 0;
+read x;
+x := x + 1;
+print x;
